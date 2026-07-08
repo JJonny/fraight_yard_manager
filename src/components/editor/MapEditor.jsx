@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Upload, Save, FolderOpen, Trash2, Circle, GitBranch, LogIn, MousePointer2 } from 'lucide-react';
-import { createEmptyGraph, nextId, getNode, getSegment, segmentsAt } from '../../engine/rail_graph.js';
+import { createEmptyGraph, nextId, getNode, getSegment, segmentsAt, parallelizeSegments } from '../../engine/rail_graph.js';
 import { listMaps, loadMap, saveMap, deleteMap } from '../../storage/map_store.js';
 
 // Compress a dataURL to JPEG, capping longest side at maxPx.
@@ -43,6 +43,7 @@ export default function MapEditor() {
   const [mapList, setMapList] = useState(listMaps());
   const [selected, setSelected] = useState(null); // { kind:'node'|'segment', id }
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [parallelOffset, setParallelOffset] = useState(40);
   const [switchConfig, setSwitchConfig] = useState(null); // { nodeId, choosing:'default'|'diverging' }
   const fileRef = useRef(null);
 
@@ -163,6 +164,14 @@ export default function MapEditor() {
     setSelected(null);
   }
 
+  function applyParallelize() {
+    if (selectedIds.size < 2) return;
+    const ids = [...selectedIds];
+    setGraph(g => parallelizeSegments(g, ids, parallelOffset));
+    setSelectedIds(new Set());
+    setSelected(null);
+  }
+
   async function doSave() {
     if (!bgImage) return alert('Upload a background image first.');
     if (!mapName.trim()) return alert('Enter a map name.');
@@ -247,6 +256,27 @@ export default function MapEditor() {
           ) : <div className="text-xs text-neutral-500">Nothing selected</div>}
         </div>
 
+        {selectedIds.size >= 2 && (
+          <div>
+            <div className="text-xs uppercase tracking-wider text-neutral-500 mb-2">Parallelize</div>
+            <div className="text-xs text-neutral-400 mb-1">
+              Reference: <code className="text-neutral-300">{[...selectedIds][0]}</code>
+            </div>
+            <div className="flex gap-2 mb-2">
+              <input type="number" min="1" step="1"
+                     value={parallelOffset}
+                     onChange={e => setParallelOffset(Math.max(1, parseInt(e.target.value) || 1))}
+                     className="w-24 px-2 py-1 rounded bg-neutral-800 border border-neutral-700 text-sm"
+                     placeholder="Offset px" />
+              <span className="text-xs text-neutral-500 self-center">px</span>
+            </div>
+            <button onClick={applyParallelize}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-emerald-700 hover:bg-emerald-600 rounded text-sm">
+              Make Parallel
+            </button>
+          </div>
+        )}
+
         <div>
           <div className="text-xs uppercase tracking-wider text-neutral-500 mb-2">Map Package</div>
           <input value={mapName} onChange={e => setMapName(e.target.value)}
@@ -282,6 +312,7 @@ export default function MapEditor() {
           <div className="font-semibold text-neutral-400 mb-1">Stats</div>
           Nodes: {graph.nodes.length} · Segments: {graph.segments.length}<br/>
           Switches: {graph.switches.length} · Entries: {graph.entryPoints.length}
+          {selectedIds.size > 0 && <> · Selected: {selectedIds.size}</>}
         </div>
       </div>
 
