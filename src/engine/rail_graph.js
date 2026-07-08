@@ -84,3 +84,65 @@ export function backNodeOf(graph, segmentId, dir) {
   const seg = getSegment(graph, segmentId);
   return dir > 0 ? seg.from : seg.to;
 }
+
+export function parallelizeSegments(graph, segmentIds, spacing) {
+  if (segmentIds.length < 2) return graph;
+
+  const refId = segmentIds[0];
+  const ref = getSegment(graph, refId);
+  const refA = getNode(graph, ref.from);
+  const refB = getNode(graph, ref.to);
+
+  const dx = refB.x - refA.x;
+  const dy = refB.y - refA.y;
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return graph;
+
+  const ux = dx / len;
+  const uy = dy / len;
+  const nx = -uy;
+  const ny = ux;
+
+  // Determine majority side
+  const otherIds = segmentIds.slice(1);
+  let pos = 0, neg = 0;
+  for (const sid of otherIds) {
+    const seg = getSegment(graph, sid);
+    const a = getNode(graph, seg.from);
+    const b = getNode(graph, seg.to);
+    const sd = ((a.x + b.x) / 2 - refA.x) * nx + ((a.y + b.y) / 2 - refA.y) * ny;
+    if (sd >= 0) pos++; else neg++;
+  }
+  const sign = pos >= neg ? 1 : -1;
+
+  // Sort by perpendicular distance
+  const ranked = otherIds.map(sid => {
+    const seg = getSegment(graph, sid);
+    const a = getNode(graph, seg.from);
+    const b = getNode(graph, seg.to);
+    const sd = ((a.x + b.x) / 2 - refA.x) * nx + ((a.y + b.y) / 2 - refA.y) * ny;
+    return { id: sid, dist: Math.abs(sd) };
+  }).sort((a, b) => a.dist - b.dist);
+
+  // Reposition nodes
+  const newNodes = graph.nodes.map(n => ({ ...n }));
+  const lenSq = len * len;
+
+  for (let k = 0; k < ranked.length; k++) {
+    const seg = getSegment(graph, ranked[k].id);
+    const offset = sign * (k + 1) * spacing;
+
+    for (const nodeId of [seg.from, seg.to]) {
+      const node = getNode(graph, nodeId);
+      const t = ((node.x - refA.x) * dx + (node.y - refA.y) * dy) / lenSq;
+      const npx = refA.x + t * dx + offset * nx;
+      const npy = refA.y + t * dy + offset * ny;
+      const idx = newNodes.findIndex(n => n.id === nodeId);
+      if (idx !== -1) {
+        newNodes[idx] = { ...newNodes[idx], x: npx, y: npy };
+      }
+    }
+  }
+
+  return { ...graph, nodes: newNodes };
+}
