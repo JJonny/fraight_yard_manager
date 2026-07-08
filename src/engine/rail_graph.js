@@ -124,23 +124,30 @@ export function parallelizeSegments(graph, segmentIds, spacing) {
     return { id: sid, dist: Math.abs(sd) };
   }).sort((a, b) => a.dist - b.dist);
 
+  // Assign each unique node the minimum rank among segments using it
+  const nodeRank = {};
+  for (let k = 0; k < ranked.length; k++) {
+    const seg = getSegment(graph, ranked[k].id);
+    for (const nodeId of [seg.from, seg.to]) {
+      if (!(nodeId in nodeRank) || k < nodeRank[nodeId]) {
+        nodeRank[nodeId] = k;
+      }
+    }
+  }
+
   // Reposition nodes
   const newNodes = graph.nodes.map(n => ({ ...n }));
   const lenSq = len * len;
 
-  for (let k = 0; k < ranked.length; k++) {
-    const seg = getSegment(graph, ranked[k].id);
-    const offset = sign * (k + 1) * spacing;
-
-    for (const nodeId of [seg.from, seg.to]) {
-      const node = getNode(graph, nodeId);
-      const t = ((node.x - refA.x) * dx + (node.y - refA.y) * dy) / lenSq;
-      const npx = refA.x + t * dx + offset * nx;
-      const npy = refA.y + t * dy + offset * ny;
-      const idx = newNodes.findIndex(n => n.id === nodeId);
-      if (idx !== -1) {
-        newNodes[idx] = { ...newNodes[idx], x: npx, y: npy };
-      }
+  for (const [nodeId, rank] of Object.entries(nodeRank)) {
+    const node = getNode(graph, nodeId);
+    const t = ((node.x - refA.x) * dx + (node.y - refA.y) * dy) / lenSq;
+    const offset = sign * (rank + 1) * spacing;
+    const npx = refA.x + t * dx + offset * nx;
+    const npy = refA.y + t * dy + offset * ny;
+    const idx = newNodes.findIndex(n => n.id === nodeId);
+    if (idx !== -1) {
+      newNodes[idx] = { ...newNodes[idx], x: npx, y: npy };
     }
   }
 

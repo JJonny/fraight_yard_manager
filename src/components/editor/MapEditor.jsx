@@ -260,7 +260,7 @@ export default function MapEditor() {
           <div>
             <div className="text-xs uppercase tracking-wider text-neutral-500 mb-2">Parallelize</div>
             <div className="text-xs text-neutral-400 mb-1">
-              Reference: <code className="text-neutral-300">{[...selectedIds][0]}</code>
+              Reference: <code className="text-neutral-300">{selectedIds.values().next().value}</code>
             </div>
             <div className="flex gap-2 mb-2">
               <input type="number" min="1" step="1"
@@ -353,7 +353,7 @@ export default function MapEditor() {
                           stroke={isSel || isMultiSel ? '#fbbf24' : '#10b981'} strokeWidth={4}
                           strokeLinecap="round" />
                   <text x={mx + ox} y={my + oy}
-                        fill={isSel ? '#fbbf24' : '#86efac'}
+                        fill={isSel || isMultiSel ? '#fbbf24' : '#86efac'}
                         fontSize="11" textAnchor="middle" dominantBaseline="middle"
                         style={{ pointerEvents: 'none', userSelect: 'none' }}>
                     {s.id}
