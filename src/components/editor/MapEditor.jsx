@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Upload, Save, FolderOpen, Trash2, Circle, GitBranch, LogIn, MousePointer2 } from 'lucide-react';
-import { createEmptyGraph, nextId, getNode, getSegment, segmentsAt, parallelizeSegments } from '../../engine/rail_graph.js';
+import { createEmptyGraph, nextId, getNode, getSegment, segmentsAt, parallelizeSegments, findSwitchBranches } from '../../engine/rail_graph.js';
 import { listMaps, loadMap, saveMap, deleteMap } from '../../storage/map_store.js';
 
 // Compress a dataURL to JPEG, capping longest side at maxPx.
@@ -93,25 +93,19 @@ export default function MapEditor() {
         setPendingFromNode(null);
       }
     } else if (tool === 'switch') {
-      // Convert this node into a switch. Need >=3 segments connected.
       const segs = segmentsAt(graph, node.id);
       if (segs.length < 3) {
         alert('Switch nodes need at least 3 connected segments.');
         return;
       }
-      // Choose default and diverging via prompts.
-      const labels = segs.map((s, i) => `${i+1}: ${s.id}`).join('\n');
-      const dIdx = parseInt(prompt(`Default branch (1-${segs.length}):\n${labels}`), 10);
-      const vIdx = parseInt(prompt(`Diverging branch (1-${segs.length}):\n${labels}`), 10);
-      if (!dIdx || !vIdx || dIdx === vIdx) return;
-      const def = segs[dIdx - 1].id;
-      const div = segs[vIdx - 1].id;
+      const branches = findSwitchBranches(graph, node.id);
+      if (!branches) return;
       setGraph(g => ({
         ...g,
         nodes: g.nodes.map(n => n.id === node.id ? { ...n, type: 'switch' } : n),
         switches: [
           ...g.switches.filter(s => s.nodeId !== node.id),
-          { id: nextId('sw'), nodeId: node.id, defaultSegment: def, divergingSegment: div, activeSegment: def, isLocked: false }
+          { id: nextId('sw'), nodeId: node.id, defaultSegment: branches.defaultSegment, divergingSegment: branches.divergingSegment, activeSegment: branches.defaultSegment, isLocked: false }
         ]
       }));
     } else if (tool === 'entry') {
@@ -452,7 +446,7 @@ export default function MapEditor() {
             {graph.nodes.map(n => {
               const isSel = selected?.kind === 'node' && selected.id === n.id;
               const isPending = pendingFromNode === n.id;
-              const fill = n.type === 'switch' ? '#a78bfa' : n.type === 'entry' ? '#f59e0b' : '#60a5fa';
+              const fill = n.type === 'switch' ? '#1e3a8a' : n.type === 'entry' ? '#f59e0b' : '#60a5fa';
               return (
                 <g key={n.id}>
                   <circle cx={n.x} cy={n.y} r={isSel || isPending ? 9 : 6}

@@ -153,3 +153,37 @@ export function parallelizeSegments(graph, segmentIds, spacing) {
 
   return { ...graph, nodes: newNodes };
 }
+
+// Given a node connected to 3+ segments, find the pair with the smallest angle between them.
+// Those two become the switch branches (default / diverging); the rest are trunk tracks.
+export function findSwitchBranches(graph, nodeId) {
+  const segs = segmentsAt(graph, nodeId);
+  if (segs.length < 3) return null;
+
+  const node = getNode(graph, nodeId);
+
+  function angleBetween(segA, segB) {
+    const otherA = getNode(graph, segA.from === nodeId ? segA.to : segA.from);
+    const otherB = getNode(graph, segB.from === nodeId ? segB.to : segB.from);
+    const dx1 = otherA.x - node.x, dy1 = otherA.y - node.y;
+    const dx2 = otherB.x - node.x, dy2 = otherB.y - node.y;
+    const dot = dx1 * dx2 + dy1 * dy2;
+    const mag1 = Math.hypot(dx1, dy1);
+    const mag2 = Math.hypot(dx2, dy2);
+    return Math.acos(Math.max(-1, Math.min(1, dot / (mag1 * mag2))));
+  }
+
+  let minAngle = Infinity;
+  let bestPair = [null, null];
+  for (let i = 0; i < segs.length; i++) {
+    for (let j = i + 1; j < segs.length; j++) {
+      const angle = angleBetween(segs[i], segs[j]);
+      if (angle < minAngle) {
+        minAngle = angle;
+        bestPair = [segs[i].id, segs[j].id];
+      }
+    }
+  }
+
+  return { defaultSegment: bestPair[0], divergingSegment: bestPair[1] };
+}
