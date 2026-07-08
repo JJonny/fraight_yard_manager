@@ -42,6 +42,7 @@ export default function MapEditor() {
   const [currentMapId, setCurrentMapId] = useState(null);
   const [mapList, setMapList] = useState(listMaps());
   const [selected, setSelected] = useState(null); // { kind:'node'|'segment', id }
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const [switchConfig, setSwitchConfig] = useState(null); // { nodeId, choosing:'default'|'diverging' }
   const fileRef = useRef(null);
 
@@ -68,6 +69,9 @@ export default function MapEditor() {
     if (tool === 'node') {
       const n = { id: nextId('n'), x, y, type: 'node' };
       setGraph(g => ({ ...g, nodes: [...g.nodes, n] }));
+    } else if (tool === 'select') {
+      setSelected(null);
+      setSelectedIds(new Set());
     }
   }
 
@@ -118,12 +122,25 @@ export default function MapEditor() {
       }));
     } else if (tool === 'select') {
       setSelected({ kind: 'node', id: node.id });
+      setSelectedIds(new Set());
     }
   }
 
   function onSegmentClick(e, seg) {
     e.stopPropagation();
-    if (tool === 'select') setSelected({ kind: 'segment', id: seg.id });
+    if (tool === 'select') {
+      if (e.ctrlKey || e.metaKey) {
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          if (next.has(seg.id)) next.delete(seg.id);
+          else next.add(seg.id);
+          return next;
+        });
+      } else {
+        setSelected({ kind: 'segment', id: seg.id });
+        setSelectedIds(new Set());
+      }
+    }
   }
 
   function deleteSelected() {
@@ -291,6 +308,7 @@ export default function MapEditor() {
               const b = getNode(graph, s.to);
               if (!a || !b) return null;
               const isSel = selected?.kind === 'segment' && selected.id === s.id;
+              const isMultiSel = selectedIds.has(s.id);
               const mx = (a.x + b.x) / 2;
               const my = (a.y + b.y) / 2;
               // Perpendicular offset for label
@@ -300,9 +318,9 @@ export default function MapEditor() {
               const oy = (dx / len) * 12;
               return (
                 <g key={s.id} onClick={(e) => onSegmentClick(e, s)} style={{ cursor: 'pointer' }}>
-                  <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                        stroke={isSel ? '#fbbf24' : '#10b981'} strokeWidth={4}
-                        strokeLinecap="round" />
+                    <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                          stroke={isSel || isMultiSel ? '#fbbf24' : '#10b981'} strokeWidth={4}
+                          strokeLinecap="round" />
                   <text x={mx + ox} y={my + oy}
                         fill={isSel ? '#fbbf24' : '#86efac'}
                         fontSize="11" textAnchor="middle" dominantBaseline="middle"
