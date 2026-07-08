@@ -45,6 +45,9 @@ export default function MapEditor() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [parallelOffset, setParallelOffset] = useState(40);
   const [switchConfig, setSwitchConfig] = useState(null); // { nodeId, choosing:'default'|'diverging' }
+  const dragRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [multiKind, setMultiKind] = useState(null); // 'node' | 'segment' | null — for Ctrl+click multi-select
   const fileRef = useRef(null);
 
   const refreshMapList = () => setMapList(listMaps());
@@ -73,6 +76,7 @@ export default function MapEditor() {
     } else if (tool === 'select') {
       setSelected(null);
       setSelectedIds(new Set());
+      setMultiKind(null);
     }
   }
 
@@ -122,8 +126,21 @@ export default function MapEditor() {
         ]
       }));
     } else if (tool === 'select') {
-      setSelected({ kind: 'node', id: node.id });
-      setSelectedIds(new Set());
+      if (e.ctrlKey || e.metaKey) {
+        if (multiKind === null || multiKind === 'node') {
+          setMultiKind('node');
+          setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(node.id)) next.delete(node.id);
+            else next.add(node.id);
+            return next;
+          });
+        }
+      } else {
+        setSelected({ kind: 'node', id: node.id });
+        setSelectedIds(new Set());
+        setMultiKind(null);
+      }
     }
   }
 
@@ -131,17 +148,84 @@ export default function MapEditor() {
     e.stopPropagation();
     if (tool === 'select') {
       if (e.ctrlKey || e.metaKey) {
-        setSelectedIds(prev => {
-          const next = new Set(prev);
-          if (next.has(seg.id)) next.delete(seg.id);
-          else next.add(seg.id);
-          return next;
-        });
+        if (multiKind === null || multiKind === 'segment') {
+          setMultiKind('segment');
+          setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(seg.id)) next.delete(seg.id);
+            else next.add(seg.id);
+            return next;
+          });
+        }
       } else {
         setSelected({ kind: 'segment', id: seg.id });
         setSelectedIds(new Set());
+        setMultiKind(null);
       }
     }
+  }
+
+  function onNodePointerDown(e, node) {
+    if (tool !== 'select' || e.button !== 2) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const svg = e.currentTarget.ownerSVGElement;
+    const rect = svg.getBoundingClientRect();
+    e.target.setPointerCapture(e.pointerId);
+
+    const isNodeSelected = (selected?.kind === 'node' && selected.id === node.id) || selectedIds.has(node.id);
+    let movingNodes;
+    if (isNodeSelected) {
+      const movingIds = new Set();
+      if (selected?.kind === 'node') movingIds.add(selected.id);
+      for (const id of selectedIds) movingIds.add(id);
+      movingNodes = graph.nodes.filter(n => movingIds.has(n.id));
+    } else {
+      setSelected({ kind: 'node', id: node.id });
+      setSelectedIds(new Set());
+      setMultiKind(null);
+      movingNodes = [{ id: node.id, x: node.x, y: node.y }];
+    }
+
+    dragRef.current = {
+      pointerId: e.pointerId,
+      startNodes: movingNodes.map(n => ({ id: n.id, x: n.x, y: n.y })),
+      startX: e.clientX,
+      startY: e.clientY,
+    };
+    setIsDragging(true);
+  }
+
+  function svgPointerMove(e) {
+    const drag = dragRef.current;
+    if (!drag || e.pointerId !== drag.pointerId) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const dx = (e.clientX - drag.startX) * (imgSize.w / rect.width);
+    const dy = (e.clientY - drag.startY) * (imgSize.h / rect.height);
+
+    const startMap = {};
+    for (const sn of drag.startNodes) startMap[sn.id] = sn;
+
+    setGraph(g => ({
+      ...g,
+      nodes: g.nodes.map(n =>
+        startMap[n.id]
+          ? { ...n, x: startMap[n.id].x + dx, y: startMap[n.id].y + dy }
+          : n
+      ),
+    }));
+  }
+
+  function svgPointerUp(e) {
+    if (!dragRef.current || e.pointerId !== dragRef.current.pointerId) return;
+    dragRef.current = null;
+    setIsDragging(false);
+  }
+
+  function svgContextMenu(e) {
+    e.preventDefault();
   }
 
   function deleteSelected() {
@@ -256,7 +340,7 @@ export default function MapEditor() {
           ) : <div className="text-xs text-neutral-500">Nothing selected</div>}
         </div>
 
-        {selectedIds.size >= 2 && (
+        {selectedIds.size >= 2 && multiKind === 'segment' && (
           <div>
             <div className="text-xs uppercase tracking-wider text-neutral-500 mb-2">Parallelize</div>
             <div className="text-xs text-neutral-400 mb-1">
@@ -331,7 +415,10 @@ export default function MapEditor() {
             height={imgSize.h}
             viewBox={`0 0 ${imgSize.w} ${imgSize.h}`}
             onClick={svgClick}
-            style={{ cursor: tool === 'node' ? 'crosshair' : 'default' }}
+            onPointerMove={svgPointerMove}
+            onPointerUp={svgPointerUp}
+            onContextMenu={svgContextMenu}
+            style={{ cursor: isDragging ? 'grabbing' : tool === 'node' ? 'crosshair' : 'default' }}
           >
             {/* Segments */}
             {graph.segments.map(s => {
@@ -371,7 +458,8 @@ export default function MapEditor() {
                   <circle cx={n.x} cy={n.y} r={isSel || isPending ? 9 : 6}
                           fill={fill} stroke={isSel ? '#fbbf24' : isPending ? '#fff' : '#0a0a0a'} strokeWidth={2}
                           onClick={(e) => onNodeClick(e, n)}
-                          style={{ cursor: 'pointer' }} />
+                          onPointerDown={(e) => onNodePointerDown(e, n)}
+                          style={{ cursor: tool === 'select' ? (isDragging ? 'grabbing' : 'grab') : 'pointer' }} />
                   {n.type === 'entry' && (
                     <text x={n.x + 10} y={n.y - 10} fill="#fde68a" fontSize="12">
                       {graph.entryPoints.find(ep => ep.nodeId === n.id)?.label}
