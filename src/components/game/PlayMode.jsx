@@ -10,7 +10,7 @@ import {
 } from '../../engine/movement.js';
 import { autoCouple, decouple } from '../../engine/coupling.js';
 import { toggleSwitch, isSwitchBlocked, SWITCH_HITBOX_RADIUS } from '../../engine/switch.js';
-import { getNode, getSegment, frontNodeOf, backNodeOf } from '../../engine/rail_graph.js';
+import { getNode, getSegment, frontNodeOf, backNodeOf, getCurve, computeCurveControlPoints } from '../../engine/rail_graph.js';
 import SpeedGauge from '../ui/SpeedGauge.jsx';
 import Legend from '../ui/Legend.jsx';
 
@@ -34,6 +34,9 @@ export default function PlayMode() {
   const [activeTrainId, setActiveTrainId] = useState(null);
   const [warning, setWarning] = useState(null);
   const [exitTargetEntryId, setExitTargetEntryId] = useState('');
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panRef = useRef(null);
 
   // Selection for decoupling: array of {trainId, unitIndex}
   const [selection, setSelection] = useState([]);
@@ -323,9 +326,41 @@ export default function PlayMode() {
         )}
       </div>
 
-      {/* Scene — explicit pixel size so overflow-auto can scroll to all edges */}
-      <div className="absolute inset-0 overflow-auto">
-        <div className="relative" style={{ width: imgSize.w, height: imgSize.h }}>
+      {/* Scene — with middle-click drag panning */}
+      <div className="absolute inset-0 overflow-hidden"
+           style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
+           onMouseDown={e => {
+             if (e.button === 1) {
+               e.preventDefault();
+               setIsPanning(true);
+               panRef.current = { startX: e.clientX, startY: e.clientY, origX: pan.x, origY: pan.y };
+             }
+           }}
+           onMouseMove={e => {
+             if (!panRef.current) return;
+             const dx = e.clientX - panRef.current.startX;
+             const dy = e.clientY - panRef.current.startY;
+             setPan({ x: panRef.current.origX + dx, y: panRef.current.origY + dy });
+           }}
+           onMouseUp={e => {
+             if (e.button === 1) {
+               panRef.current = null;
+               setIsPanning(false);
+             }
+           }}
+           onMouseLeave={() => {
+             if (panRef.current) {
+               panRef.current = null;
+               setIsPanning(false);
+             }
+           }}
+           onWheel={e => {
+             setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
+           }}>
+        <div className="relative" style={{
+          width: imgSize.w, height: imgSize.h,
+          transform: `translate(${pan.x}px, ${pan.y}px)`,
+        }}>
           {mapPkg.background && (
             <img src={mapPkg.background} alt="map" draggable={false}
                  style={{ width: imgSize.w, height: imgSize.h }} />
@@ -434,6 +469,16 @@ function SceneOverlay({ graph, trains, activeTrainId, selection, onSwitchClick, 
         const sw = graph.switches.find(w => w.defaultSegment === s.id || w.divergingSegment === s.id);
         let stroke = '#10b981';
         if (sw) stroke = sw.activeSegment === s.id ? '#22c55e' : '#525252';
+        const curve = getCurve(graph, s.id);
+        if (curve) {
+          const cps = computeCurveControlPoints(graph, s.id, curve.strength);
+          if (cps) {
+            const d = `M ${a.x},${a.y} C ${cps.cp1.x},${cps.cp1.y} ${cps.cp2.x},${cps.cp2.y} ${b.x},${b.y}`;
+            return (
+              <path key={s.id} d={d} stroke={stroke} strokeWidth={4} fill="none" strokeLinecap="round" />
+            );
+          }
+        }
         return (
           <line key={s.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
                 stroke={stroke} strokeWidth={4} strokeLinecap="round" />

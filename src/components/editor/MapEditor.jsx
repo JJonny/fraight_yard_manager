@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Upload, Save, FolderOpen, Trash2, Circle, GitBranch, LogIn, MousePointer2 } from 'lucide-react';
-import { createEmptyGraph, nextId, getNode, getSegment, segmentsAt, parallelizeSegments, findSwitchBranches } from '../../engine/rail_graph.js';
+import { createEmptyGraph, nextId, getNode, getSegment, segmentsAt, parallelizeSegments, findSwitchBranches, getCurve, computeCurveControlPoints, makeCurve, removeCurve, getSwitch } from '../../engine/rail_graph.js';
 import { listMaps, loadMap, saveMap, deleteMap } from '../../storage/map_store.js';
 
 // Compress a dataURL to JPEG, capping longest side at maxPx.
@@ -44,6 +44,7 @@ export default function MapEditor() {
   const [selected, setSelected] = useState(null); // { kind:'node'|'segment', id }
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [parallelOffset, setParallelOffset] = useState(40);
+  const [curveStrength, setCurveStrength] = useState(0.3);
   const [switchConfig, setSwitchConfig] = useState(null); // { nodeId, choosing:'default'|'diverging' }
   const dragRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -225,18 +226,24 @@ export default function MapEditor() {
   function deleteSelected() {
     if (!selected) return;
     if (selected.kind === 'node') {
-      setGraph(g => ({
-        ...g,
-        nodes: g.nodes.filter(n => n.id !== selected.id),
-        segments: g.segments.filter(s => s.from !== selected.id && s.to !== selected.id),
-        switches: g.switches.filter(s => s.nodeId !== selected.id),
-        entryPoints: g.entryPoints.filter(ep => ep.nodeId !== selected.id)
-      }));
+      setGraph(g => {
+        const remainingSegments = g.segments.filter(s => s.from !== selected.id && s.to !== selected.id);
+        const remainingIds = new Set(remainingSegments.map(s => s.id));
+        return {
+          ...g,
+          nodes: g.nodes.filter(n => n.id !== selected.id),
+          segments: remainingSegments,
+          switches: g.switches.filter(s => s.nodeId !== selected.id),
+          entryPoints: g.entryPoints.filter(ep => ep.nodeId !== selected.id),
+          curves: g.curves.filter(c => remainingIds.has(c.segmentId)),
+        };
+      });
     } else {
       setGraph(g => ({
         ...g,
         segments: g.segments.filter(s => s.id !== selected.id),
-        switches: g.switches.filter(sw => sw.defaultSegment !== selected.id && sw.divergingSegment !== selected.id)
+        switches: g.switches.filter(sw => sw.defaultSegment !== selected.id && sw.divergingSegment !== selected.id),
+        curves: g.curves.filter(c => c.segmentId !== selected.id),
       }));
     }
     setSelected(null);
@@ -248,6 +255,25 @@ export default function MapEditor() {
     setGraph(g => parallelizeSegments(g, ids, parallelOffset));
     setSelectedIds(new Set());
     setSelected(null);
+  }
+
+  function isSegmentCurveable(graph, segmentId) {
+    const seg = getSegment(graph, segmentId);
+    if (!seg) return false;
+    if (getSwitch(graph, seg.from) || getSwitch(graph, seg.to)) return false;
+    const atFrom = segmentsAt(graph, seg.from, seg.id);
+    const atTo = segmentsAt(graph, seg.to, seg.id);
+    return atFrom.length === 1 && atTo.length === 1;
+  }
+
+  function applyCurveToggle() {
+    if (!selected || selected.kind !== 'segment') return;
+    const existing = getCurve(graph, selected.id);
+    if (existing) {
+      setGraph(g => removeCurve(g, selected.id));
+    } else {
+      setGraph(g => makeCurve(g, selected.id, curveStrength));
+    }
   }
 
   async function doSave() {
@@ -355,6 +381,37 @@ export default function MapEditor() {
           </div>
         )}
 
+        {selected?.kind === 'segment' && isSegmentCurveable(graph, selected.id) && (
+          <div>
+            <div className="text-xs uppercase tracking-wider text-neutral-500 mb-2">Curve</div>
+            {getCurve(graph, selected.id) ? (
+              <div className="flex gap-2 mb-2">
+                <input type="range" min="0.05" max="1" step="0.05"
+                       value={curveStrength}
+                       onChange={e => {
+                         const v = parseFloat(e.target.value);
+                         setCurveStrength(v);
+                         setGraph(g => makeCurve(g, selected.id, v));
+                       }}
+                       className="w-full" />
+                <span className="text-xs text-neutral-400 w-8 text-right">{curveStrength.toFixed(2)}</span>
+              </div>
+            ) : (
+              <div className="flex gap-2 mb-2">
+                <input type="range" min="0.05" max="1" step="0.05"
+                       value={curveStrength}
+                       onChange={e => setCurveStrength(parseFloat(e.target.value))}
+                       className="w-full" />
+                <span className="text-xs text-neutral-400 w-8 text-right">{curveStrength.toFixed(2)}</span>
+              </div>
+            )}
+            <button onClick={applyCurveToggle}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-emerald-700 hover:bg-emerald-600 rounded text-sm">
+              {getCurve(graph, selected.id) ? 'Make Straight' : 'Make Curve'}
+            </button>
+          </div>
+        )}
+
         <div>
           <div className="text-xs uppercase tracking-wider text-neutral-500 mb-2">Map Package</div>
           <input value={mapName} onChange={e => setMapName(e.target.value)}
@@ -428,19 +485,33 @@ export default function MapEditor() {
               const len = Math.hypot(dx, dy) || 1;
               const ox = (-dy / len) * 12;
               const oy = (dx / len) * 12;
-              return (
-                <g key={s.id} onClick={(e) => onSegmentClick(e, s)} style={{ cursor: 'pointer' }}>
-                    <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                          stroke={isSel || isMultiSel ? '#fbbf24' : '#10b981'} strokeWidth={4}
-                          strokeLinecap="round" />
-                  <text x={mx + ox} y={my + oy}
-                        fill={isSel || isMultiSel ? '#fbbf24' : '#86efac'}
-                        fontSize="11" textAnchor="middle" dominantBaseline="middle"
-                        style={{ pointerEvents: 'none', userSelect: 'none' }}>
-                    {s.id}
-                  </text>
-                </g>
-              );
+  const stroke = isSel || isMultiSel ? '#fbbf24' : '#10b981';
+  return (
+    <g key={s.id} onClick={(e) => onSegmentClick(e, s)} style={{ cursor: 'pointer' }}>
+      {(() => {
+        const curve = getCurve(graph, s.id);
+        if (curve) {
+          const cps = computeCurveControlPoints(graph, s.id, curve.strength);
+          if (cps) {
+            const d = `M ${a.x},${a.y} C ${cps.cp1.x},${cps.cp1.y} ${cps.cp2.x},${cps.cp2.y} ${b.x},${b.y}`;
+            return (
+              <path d={d} stroke={stroke} strokeWidth={4} fill="none" strokeLinecap="round" />
+            );
+          }
+        }
+        return (
+          <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                stroke={stroke} strokeWidth={4} strokeLinecap="round" />
+        );
+      })()}
+      <text x={mx + ox} y={my + oy}
+            fill={isSel || isMultiSel ? '#fbbf24' : '#86efac'}
+            fontSize="11" textAnchor="middle" dominantBaseline="middle"
+            style={{ pointerEvents: 'none', userSelect: 'none' }}>
+        {s.id}
+      </text>
+    </g>
+  );
             })}
             {/* Nodes */}
             {graph.nodes.map(n => {

@@ -33,7 +33,7 @@ export function pathPositionToWorld(graph, path, dist) {
       const local = Math.max(0, Math.min(segLen, dist - acc));
       const t = segLen === 0 ? 0 : local / segLen;
       const pt = pointOnSegment(graph, p.segmentId, t, p.dir);
-      const ang = segmentAngle(graph, p.segmentId, p.dir);
+      const ang = segmentAngle(graph, p.segmentId, p.dir, t);
       return { x: pt.x, y: pt.y, angle: ang, segmentId: p.segmentId };
     }
     acc += segLen;
@@ -42,7 +42,7 @@ export function pathPositionToWorld(graph, path, dist) {
   const last = path[path.length - 1];
   const segLen = segmentLength(graph, getSegment(graph, last.segmentId));
   const pt = pointOnSegment(graph, last.segmentId, 1, last.dir);
-  return { x: pt.x, y: pt.y, angle: segmentAngle(graph, last.segmentId, last.dir), segmentId: last.segmentId };
+  return { x: pt.x, y: pt.y, angle: segmentAngle(graph, last.segmentId, last.dir, 1), segmentId: last.segmentId };
 }
 
 // Position of every unit (head→tail) in world space.
