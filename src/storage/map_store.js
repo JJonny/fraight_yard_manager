@@ -12,7 +12,7 @@ function writeAll(obj) {
     localStorage.setItem(KEY, JSON.stringify(obj));
   } catch (e) {
     if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-      throw new Error('Недостаточно места в localStorage. Попробуйте уменьшить фоновое изображение или удалить старые карты.');
+      throw new Error('localStorage quota exceeded. Try reducing the background image size or deleting old maps.');
     }
     throw e;
   }

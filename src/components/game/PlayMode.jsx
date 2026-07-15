@@ -66,89 +66,93 @@ export default function PlayMode() {
     let raf;
     let last = performance.now();
     const loop = (now) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      const ts = trainsRef.current;
+      try {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        const ts = trainsRef.current;
 
-      for (const t of ts) {
-        if (t.isExiting) {
-          // Advance manually past the track boundary at constant speed.
-          const spd = t.exitSpeed; // px/sec, always positive
-          t.headPos += t.exitDir > 0 ? spd * dt : -(spd * dt);
-          continue;
-        }
+        for (const t of ts) {
+          if (t.isExiting) {
+            // Advance manually past the track boundary at constant speed.
+            const spd = t.exitSpeed; // px/sec, always positive
+            t.headPos += t.exitDir > 0 ? spd * dt : -(spd * dt);
+            continue;
+          }
 
-        const prevSpeed = t.speedPos;
-        advanceTrain(graph, t, dt);
+          const prevSpeed = t.speedPos;
+          advanceTrain(graph, t, dt);
 
-        // Detect arrival at exit entry (forward: head hits entry node dead-end).
-        if (t.exitEntryNodeId && !t.isExiting) {
-          const pLen = pathTotalLength(graph, t.path);
-          const tl = trainLength(t);
-          const last_ = t.path[t.path.length - 1];
-          const first_ = t.path[0];
+          // Detect arrival at exit entry (forward: head hits entry node dead-end).
+          if (t.exitEntryNodeId && !t.isExiting) {
+            const pLen = pathTotalLength(graph, t.path);
+            const tl = trainLength(t);
+            const last_ = t.path[t.path.length - 1];
+            const first_ = t.path[0];
 
-          if (frontNodeOf(graph, last_.segmentId, last_.dir) === t.exitEntryNodeId
-              && t.headPos >= pLen - 2) {
-            // Head has reached the exit entry going forward.
-            t.isExiting = true;
-            t.exitDir = 1;
-            t.exitAnchor = pLen;
-            t.exitSpeed = Math.max(1, Math.abs(prevSpeed)) * PIXELS_PER_GEAR;
-            t.speedPos = 0;
-          } else if (backNodeOf(graph, first_.segmentId, first_.dir) === t.exitEntryNodeId
-              && t.headPos - tl <= 2) {
-            // Tail has reached the exit entry going backward.
-            t.isExiting = true;
-            t.exitDir = -1;
-            t.exitAnchor = 0;
-            t.exitSpeed = Math.max(1, Math.abs(prevSpeed)) * PIXELS_PER_GEAR;
-            t.speedPos = 0;
+            if (frontNodeOf(graph, last_.segmentId, last_.dir) === t.exitEntryNodeId
+                && t.headPos >= pLen - 2) {
+              // Head has reached the exit entry going forward.
+              t.isExiting = true;
+              t.exitDir = 1;
+              t.exitAnchor = pLen;
+              t.exitSpeed = Math.max(1, Math.abs(prevSpeed)) * PIXELS_PER_GEAR;
+              t.speedPos = 0;
+            } else if (backNodeOf(graph, first_.segmentId, first_.dir) === t.exitEntryNodeId
+                && t.headPos - tl <= 2) {
+              // Tail has reached the exit entry going backward.
+              t.isExiting = true;
+              t.exitDir = -1;
+              t.exitAnchor = 0;
+              t.exitSpeed = Math.max(1, Math.abs(prevSpeed)) * PIXELS_PER_GEAR;
+              t.speedPos = 0;
+            }
           }
         }
-      }
 
-      // Remove trains that have fully exited (all unit opacities reached 0).
-      const activeTrans = ts.filter(t => {
-        if (!t.isExiting) return true;
-        const tl = trainLength(t);
-        if (t.exitDir > 0) return t.headPos <= t.exitAnchor + tl + UNIT_LENGTH;
-        else return t.headPos >= -(UNIT_LENGTH);
-      });
-      // If active train was removed, clear selection.
-      if (activeTrans.length < ts.length) {
-        const removedIds = ts.filter(t => !activeTrans.includes(t)).map(t => t.id);
-        if (removedIds.includes(activeTrainIdRef.current)) {
-          setActiveTrainId(null);
-          activeTrainIdRef.current = null;
+        // Remove trains that have fully exited (all unit opacities reached 0).
+        const activeTrans = ts.filter(t => {
+          if (!t.isExiting) return true;
+          const tl = trainLength(t);
+          if (t.exitDir > 0) return t.headPos <= t.exitAnchor + tl + UNIT_LENGTH;
+          else return t.headPos >= -(UNIT_LENGTH);
+        });
+        // If active train was removed, clear selection.
+        if (activeTrans.length < ts.length) {
+          const removedIds = ts.filter(t => !activeTrans.includes(t)).map(t => t.id);
+          if (removedIds.includes(activeTrainIdRef.current)) {
+            setActiveTrainId(null);
+            activeTrainIdRef.current = null;
+          }
         }
-      }
 
-      // Capture the currently controlled loco unit (by reference) so we can re-find it
-      // after any merge below, even if the merge changes which train id "wins".
-      const prevActiveTrain = activeTrans.find(t => t.id === activeTrainIdRef.current);
-      const prevActiveUnit = prevActiveTrain ? prevActiveTrain.units[prevActiveTrain.activeLocoIndex] : null;
+        // Capture the currently controlled loco unit (by reference) so we can re-find it
+        // after any merge below, even if the merge changes which train id "wins".
+        const prevActiveTrain = activeTrans.find(t => t.id === activeTrainIdRef.current);
+        const prevActiveUnit = prevActiveTrain ? prevActiveTrain.units[prevActiveTrain.activeLocoIndex] : null;
 
-      // Collisions: stop a train if its head reaches another train's bounds, and report
-      // which pairs actually collided so they can be coupled together below (a collision
-      // between two trains on the same track IS a coupling event, not a permanent wall).
-      const collidedPairs = checkCollisions(graph, activeTrans);
-      // Auto-coupling (exiting trains are at map edges, safe to include).
-      autoCouple(graph, activeTrans, collidedPairs);
+        // Collisions: stop a train if its head reaches another train's bounds, and report
+        // which pairs actually collided so they can be coupled together below (a collision
+        // between two trains on the same track IS a coupling event, not a permanent wall).
+        const collidedPairs = checkCollisions(graph, activeTrans);
+        // Auto-coupling (exiting trains are at map edges, safe to include).
+        autoCouple(graph, activeTrans, collidedPairs);
 
-      // If a merge happened, keep control focus on the same physical loco, regardless of
-      // which train id survived the merge.
-      if (prevActiveUnit && !activeTrans.some(t => t.id === activeTrainIdRef.current)) {
-        const ownerTrain = activeTrans.find(t => t.units.includes(prevActiveUnit));
-        if (ownerTrain) {
-          ownerTrain.activeLocoIndex = ownerTrain.units.indexOf(prevActiveUnit);
-          activeTrainIdRef.current = ownerTrain.id;
-          setActiveTrainId(ownerTrain.id);
+        // If a merge happened, keep control focus on the same physical loco, regardless of
+        // which train id survived the merge.
+        if (prevActiveUnit && !activeTrans.some(t => t.id === activeTrainIdRef.current)) {
+          const ownerTrain = activeTrans.find(t => t.units.includes(prevActiveUnit));
+          if (ownerTrain) {
+            ownerTrain.activeLocoIndex = ownerTrain.units.indexOf(prevActiveUnit);
+            activeTrainIdRef.current = ownerTrain.id;
+            setActiveTrainId(ownerTrain.id);
+          }
         }
-      }
 
-      trainsRef.current = activeTrans;
-      setTrains([...activeTrans]);
+        trainsRef.current = activeTrans;
+        setTrains([...activeTrans]);
+      } catch (err) {
+        console.error('Game loop error:', err);
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
