@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Upload, Save, FolderOpen, Trash2, Circle, GitBranch, LogIn, MousePointer2 } from 'lucide-react';
 import { createEmptyGraph, nextId, getNode, getSegment, segmentsAt, parallelizeSegments, findSwitchBranches, getCurve, computeCurveControlPoints, makeCurve, removeCurve, getSwitch } from '../../engine/rail_graph.js';
 import { listMaps, loadMap, saveMap, deleteMap } from '../../storage/map_store.js';
@@ -45,7 +45,7 @@ export default function MapEditor() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [parallelOffset, setParallelOffset] = useState(40);
   const [curveStrength, setCurveStrength] = useState(0.3);
-  const [switchConfig, setSwitchConfig] = useState(null); // { nodeId, choosing:'default'|'diverging' }
+
   const dragRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [multiKind, setMultiKind] = useState(null); // 'node' | 'segment' | null — for Ctrl+click multi-select
@@ -166,7 +166,7 @@ export default function MapEditor() {
     e.stopPropagation();
 
     const svg = e.currentTarget.ownerSVGElement;
-    const rect = svg.getBoundingClientRect();
+    svg.getBoundingClientRect();
     e.target.setPointerCapture(e.pointerId);
 
     const isNodeSelected = (selected?.kind === 'node' && selected.id === node.id) || selectedIds.has(node.id);

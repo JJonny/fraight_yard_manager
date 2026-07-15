@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node tests/engine/movement.test.mjs && node tests/engine/coupling.test.mjs"
+    "test": "node tests/engine/movement.test.mjs && node tests/engine/coupling.test.mjs",
+    "lint": "eslint src/ tests/",
+    "lint:fix": "eslint --fix src/ tests/",
+    "prepare": "husky"
   },
   "dependencies": {
     "lucide-react": "^0.451.0",
@@ -15,8 +18,14 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^15.15.0",
+    "husky": "^9.1.7",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "vite": "^5.4.8"

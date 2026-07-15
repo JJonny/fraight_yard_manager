@@ -1,6 +1,6 @@
 // Movement engine: rigid path-following trains over a RailGraph.
 import {
-  getSegment, getNode, segmentLength, pointOnSegment, segmentAngle,
+  getSegment, segmentLength, pointOnSegment, segmentAngle,
   nextSegment, frontNodeOf, backNodeOf
 } from './rail_graph.js';
 
@@ -40,7 +40,7 @@ export function pathPositionToWorld(graph, path, dist) {
   }
   // Beyond end – clamp to end of last
   const last = path[path.length - 1];
-  const segLen = segmentLength(graph, getSegment(graph, last.segmentId));
+  segmentLength(graph, getSegment(graph, last.segmentId));
   const pt = pointOnSegment(graph, last.segmentId, 1, last.dir);
   return { x: pt.x, y: pt.y, angle: segmentAngle(graph, last.segmentId, last.dir, 1), segmentId: last.segmentId };
 }

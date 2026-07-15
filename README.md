@@ -28,6 +28,8 @@ Built with **React 18**, **Vite 5**, and **TailwindCSS 3**. There is no backend 
 | Build tool | Vite 5                               |
 | Styling    | TailwindCSS 3                        |
 | Icons      | lucide-react                         |
+| Linting    | ESLint 9 (flat config) + React/hooks plugins |
+| Git hooks  | Husky                                |
 | Engine     | Plain JS modules (no framework deps) |
 | Persistence| Browser `localStorage`               |
 
@@ -66,7 +68,22 @@ Outputs a production-ready bundle to `dist/`.
 npm run preview
 ```
 
-> There are currently no test, lint, or typecheck scripts configured for this project.
+### Lint
+
+```bash
+npm run lint        # check for lint errors
+npm run lint:fix    # auto-fix what's possible
+```
+
+### Tests
+
+```bash
+npm test
+```
+
+Runs the engine unit tests (`movement.test.mjs`, `coupling.test.mjs`).
+
+> A **pre-commit hook** (via Husky) runs `npm run lint && npm test` automatically before every commit. After `npm install`, git hooks are set up — no manual configuration needed.
 
 ## Project Structure
 
@@ -134,6 +151,8 @@ src/
 ## Contributing
 
 Adding new physical constants or vehicle/asset types requires changes in **both** the engine (`src/engine/`) and the React components that render them (`MapEditor.jsx`, `PlayMode.jsx`, `ConsistBuilder.jsx`).
+
+A pre-commit hook runs linting and tests automatically before each commit. If either fails, the commit is blocked. Fix all issues before committing.
 
 ## License
 

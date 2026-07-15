@@ -1,7 +1,7 @@
 // Coupling and decoupling logic.
 import {
   trainHeadWorld, trainTailWorld, trainLength, COUPLE_DIST, COLLISION_PROXY_DIST,
-  pathTotalLength, unitWorldPositions
+  pathTotalLength
 } from './movement.js';
 import { segmentLength, getSegment } from './rail_graph.js';
 
@@ -176,7 +176,6 @@ export function decouple(graph, train, splitAfterIndex) {
   const backUnits  = train.units.slice(splitAfterIndex + 1);
 
   const frontLength = frontUnits.reduce((s, u) => s + u.length, 0);
-  const backLength  = backUnits.reduce((s, u) => s + u.length, 0);
 
   // Front train occupies [headPos - frontLength, headPos]
   // Back train occupies  [headPos - frontLength - backLength, headPos - frontLength]
@@ -204,13 +203,11 @@ function makeSubTrain(graph, parent, units, headPos) {
   // Find which path segments are needed: those whose [acc, acc+len] overlaps [tailPos, headPos].
   let acc = 0;
   const path = [];
-  let pathStartCut = 0;
   for (const p of parent.path) {
     const segLen = segmentLength(graph, getSegment(graph, p.segmentId));
     const segStart = acc, segEnd = acc + segLen;
     if (segEnd >= tailPos && segStart <= headPos) {
       path.push({ ...p });
-      if (path.length === 1) pathStartCut = Math.max(0, tailPos - segStart);
     }
     acc += segLen;
   }

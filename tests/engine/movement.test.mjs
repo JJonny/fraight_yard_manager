@@ -1,6 +1,6 @@
 import {
   advanceTrain, checkCollisions, trainLength, trainHeadWorld, trainTailWorld,
-  unitWorldPositions, COLLISION_PROXY_DIST
+  unitWorldPositions
 } from '../../src/engine/movement.js';
 import { graph, assert, results, makeUnits, posEq } from './helpers.mjs';
 

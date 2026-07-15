@@ -1,17 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Play, Link2, Unlink, AlertTriangle } from 'lucide-react';
+import { Play, Unlink, AlertTriangle } from 'lucide-react';
 import { listMaps, loadMap } from '../../storage/map_store.js';
 import { listConsists, loadConsist } from '../../storage/consist_store.js';
 import { LOCO_TYPES } from '../../assets/loco_types.js';
 import { WAGON_TYPES } from '../../assets/wagon_types.js';
 import {
   UNIT_LENGTH, UNIT_WIDTH, PIXELS_PER_GEAR, advanceTrain, unitWorldPositions,
-  trainHeadWorld, trainTailWorld, buildEntryPath, trainLength, pathTotalLength,
+  buildEntryPath, trainLength, pathTotalLength,
   checkCollisions
 } from '../../engine/movement.js';
 import { autoCouple, decouple } from '../../engine/coupling.js';
 import { toggleSwitch, isSwitchBlocked, SWITCH_HITBOX_RADIUS } from '../../engine/switch.js';
-import { getNode, getSegment, frontNodeOf, backNodeOf, getCurve, computeCurveControlPoints } from '../../engine/rail_graph.js';
+import { getNode, frontNodeOf, backNodeOf, getCurve, computeCurveControlPoints } from '../../engine/rail_graph.js';
 import SpeedGauge from '../ui/SpeedGauge.jsx';
 import Legend from '../ui/Legend.jsx';
 
@@ -302,7 +302,7 @@ export default function PlayMode() {
           <option value="">— pick a map —</option>
           {maps.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
-        {maps.length === 0 && <div className="text-xs text-neutral-500">No maps saved. Create one in "Create Map" first.</div>}
+        {maps.length === 0 && <div className="text-xs text-neutral-500">No maps saved. Create one in &quot;Create Map&quot; first.</div>}
       </div>
     );
   }
