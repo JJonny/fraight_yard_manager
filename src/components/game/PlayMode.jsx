@@ -176,6 +176,13 @@ export default function PlayMode() {
     return () => window.removeEventListener('keydown', onKey);
   }, [activeTrainId]);
 
+  // Prevent browser back/forward swipe on trackpad (passive:false needed for preventDefault).
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); };
+    document.addEventListener('wheel', handler, { passive: false });
+    return () => document.removeEventListener('wheel', handler);
+  }, []);
+
   function spawnConsist() {
     if (!pickedConsist || !pickedEntry || !graph) return;
     const last = lastSpawnByEntry[pickedEntry] || 0;

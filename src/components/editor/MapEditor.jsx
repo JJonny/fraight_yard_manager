@@ -452,7 +452,7 @@ export default function MapEditor() {
       </div>
 
       {/* Canvas */}
-      <div className="flex-1 min-w-0 relative bg-neutral-800 overflow-auto">
+      <div className="flex-1 min-w-0 relative bg-neutral-800 overflow-auto overscroll-x-none">
         <div className="relative" style={{ width: imgSize.w, height: imgSize.h }}>
           {bgImage && <img src={bgImage} alt="bg" className="absolute inset-0 w-full h-full" draggable={false} />}
           {!bgImage && (
