@@ -159,8 +159,19 @@ export function advanceTrain(graph, train, dt) {
 // Distance below which two trains' bodies are considered "touching" for collision purposes.
 export const COLLISION_PROXY_DIST = UNIT_LENGTH * 0.85;
 
+// Check if two unit segments are the same or adjacent (share a node at a junction).
+function sameOrAdjacentSegment(graph, segIdA, segIdB) {
+  if (segIdA === segIdB) return true;
+  const a = getSegment(graph, segIdA);
+  const b = getSegment(graph, segIdB);
+  if (!a || !b) return false;
+  return a.from === b.from || a.from === b.to || a.to === b.from || a.to === b.to;
+}
+
 // Stop a train when colliding with another. Brute force: if any pair of unit centers from
 // different trains is closer than COLLISION_PROXY_DIST (overlap proxy), stop the moving one.
+// Units on non-adjacent track segments are never considered colliding — this prevents false
+// positives when parallel tracks run close to each other.
 // Returns the list of colliding train-id pairs (deduplicated) so callers can couple them.
 export function checkCollisions(graph, trains) {
   const allPositions = trains.map(t => ({ train: t, positions: unitWorldPositions(graph, t) }));
@@ -173,6 +184,7 @@ export function checkCollisions(graph, trains) {
       let hit = false;
       for (const a of A.positions) {
         for (const b of B.positions) {
+          if (!sameOrAdjacentSegment(graph, a.segmentId, b.segmentId)) continue;
           const d = Math.hypot(a.x - b.x, a.y - b.y);
           if (d < COLLISION_PROXY_DIST) { hit = true; break; }
         }

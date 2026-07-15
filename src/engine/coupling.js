@@ -5,6 +5,17 @@ import {
 } from './movement.js';
 import { segmentLength, getSegment } from './rail_graph.js';
 
+// Check if two world positions are on the same or adjacent track segments
+// (adjacent = share a node, meaning the tracks meet at a junction).
+function sameOrAdjacentSegment(graph, p, q) {
+  if (p.segmentId === q.segmentId) return true;
+  const segA = getSegment(graph, p.segmentId);
+  const segB = getSegment(graph, q.segmentId);
+  if (!segA || !segB) return false;
+  return segA.from === segB.from || segA.from === segB.to ||
+         segA.to === segB.from || segA.to === segB.to;
+}
+
 // Check all pairs of trains. If any heads/tails are close, merge them.
 // `forcedPairs` (list of [idA, idB]) are pairs that must couple regardless of the normal
 // tight distance threshold — used when checkCollisions() has already detected physical
@@ -49,25 +60,25 @@ export function autoCouple(graph, trains, forcedPairs = []) {
         const Btail = trainTailWorld(graph, B);
 
         // A's head touches B's tail → A is behind B, same direction; merge so B's units come first then A's.
-        if (dist(Ahead, Btail) < threshold) {
+        if (dist(Ahead, Btail) < threshold && sameOrAdjacentSegment(graph, Ahead, Btail)) {
           const merged = mergeSameDirection(graph, B, A); // B head, A tail
           replacePair(trains, i, j, merged);
           changed = true; break outer;
         }
         // A's tail touches B's head → B is behind A, same direction; merge so A first then B.
-        if (dist(Atail, Bhead) < threshold) {
+        if (dist(Atail, Bhead) < threshold && sameOrAdjacentSegment(graph, Atail, Bhead)) {
           const merged = mergeSameDirection(graph, A, B);
           replacePair(trains, i, j, merged);
           changed = true; break outer;
         }
         // A's head touches B's head → head-on collision (opposite directions).
-        if (dist(Ahead, Bhead) < threshold) {
+        if (dist(Ahead, Bhead) < threshold && sameOrAdjacentSegment(graph, Ahead, Bhead)) {
           const merged = mergeOpposingNoses(graph, A, B);
           replacePair(trains, i, j, merged);
           changed = true; break outer;
         }
         // A's tail touches B's tail → rear-to-rear (both backed into each other).
-        if (dist(Atail, Btail) < threshold) {
+        if (dist(Atail, Btail) < threshold && sameOrAdjacentSegment(graph, Atail, Btail)) {
           const merged = mergeOpposingTails(graph, A, B);
           replacePair(trains, i, j, merged);
           changed = true; break outer;

@@ -2,7 +2,7 @@ import {
   advanceTrain, checkCollisions, trainLength, trainHeadWorld, trainTailWorld,
   unitWorldPositions
 } from '../../src/engine/movement.js';
-import { graph, assert, results, makeUnits, posEq } from './helpers.mjs';
+import { graph, parallelGraph, assert, results, makeUnits, posEq } from './helpers.mjs';
 
 // ── advanceTrain ──────────────────────────────────────────────────────────────
 console.log('--- advanceTrain ---');
@@ -92,6 +92,23 @@ console.log('--- checkCollisions ---');
   };
   const pairs = checkCollisions(graph, [A, B]);
   assert(pairs.length === 0, 'no collision when far apart');
+}
+
+// ── checkCollisions: parallel tracks (no false positive) ──────────────────────
+console.log('--- checkCollisions: parallel tracks ---');
+{
+  // Two trains on different tracks 15px apart — must NOT collide.
+  const A = {
+    id: 'pA', name: 'pA', units: [{ kind: 'loco', typeId: 'l0', length: 28 }],
+    path: [{ segmentId: 'ps1', dir: 1 }], headPos: 250, speedPos: 3,
+  };
+  const B = {
+    id: 'pB', name: 'pB', units: [{ kind: 'loco', typeId: 'l1', length: 28 }],
+    path: [{ segmentId: 'ps2', dir: 1 }], headPos: 250, speedPos: 0,
+  };
+  const pairs = checkCollisions(parallelGraph, [A, B]);
+  assert(pairs.length === 0, 'no collision on parallel tracks');
+  assert(A.speedPos === 3, 'moving train NOT stopped on parallel track');
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────

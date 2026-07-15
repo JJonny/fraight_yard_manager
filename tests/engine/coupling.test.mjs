@@ -1,6 +1,6 @@
 import { unitWorldPositions } from '../../src/engine/movement.js';
 import { autoCouple, decouple } from '../../src/engine/coupling.js';
-import { graph, assert, results, makeUnits } from './helpers.mjs';
+import { graph, parallelGraph, assert, results, makeUnits } from './helpers.mjs';
 
 // ── autoCouple: pursuit (same-direction, head-tail) ───────────────────────────
 console.log('--- autoCouple: pursuit merge ---');
@@ -139,6 +139,27 @@ console.log('--- autoCouple: pursuit with unit identity preserved ---');
     assert(merged.units.indexOf(prevUnitB1) === 3, 'B active unit is now last (idx 3)');
     console.log(`  activeLocoIndex: ${merged.activeLocoIndex}, merged units: ${merged.units.map(u=>u.typeId).join(',')}`);
   }
+}
+
+// ── autoCouple: parallel tracks (no false coupling) ───────────────────────────
+console.log('--- autoCouple: parallel tracks ---');
+{
+  // Two trains on different tracks 15px apart — must NOT couple.
+  const trains = [
+    { id: 'pA', name: 'pA', units: makeUnits(2, 'a'), path: [{ segmentId: 'ps1', dir: 1 }], headPos: 250, speedPos: 0, activeLocoIndex: 0 },
+    { id: 'pB', name: 'pB', units: makeUnits(2, 'b'), path: [{ segmentId: 'ps2', dir: 1 }], headPos: 250, speedPos: 0, activeLocoIndex: 0 },
+  ];
+  autoCouple(parallelGraph, trains);
+  assert(trains.length === 2, 'trains on parallel tracks did NOT couple');
+}
+{
+  // Forced pair on different tracks — must still NOT couple (track takes precedence).
+  const trains = [
+    { id: 'pC', name: 'pC', units: makeUnits(1, 'c'), path: [{ segmentId: 'ps1', dir: 1 }], headPos: 250, speedPos: 0, activeLocoIndex: 0 },
+    { id: 'pD', name: 'pD', units: makeUnits(1, 'd'), path: [{ segmentId: 'ps2', dir: 1 }], headPos: 250, speedPos: 0, activeLocoIndex: 0 },
+  ];
+  autoCouple(parallelGraph, trains, [['pC', 'pD']]);
+  assert(trains.length === 2, 'forced pair on different tracks did NOT couple');
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────

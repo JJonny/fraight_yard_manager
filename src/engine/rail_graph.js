@@ -15,6 +15,37 @@ export function createEmptyGraph() {
 let _id = 1;
 export const nextId = (prefix = 'id') => `${prefix}_${Date.now().toString(36)}_${(_id++).toString(36)}`;
 
+// ---------------------------------------------------------------------------
+// Lazy Map-based indexes — built once per graph object, invalidated when the
+// graph reference changes (the editor/play always produce a new object).
+// ---------------------------------------------------------------------------
+function _ensureIndexes(graph) {
+  if (graph._idx) return graph._idx;
+  const nodeMap = new Map();
+  for (const n of graph.nodes) nodeMap.set(n.id, n);
+  const segmentMap = new Map();
+  for (const s of graph.segments) segmentMap.set(s.id, s);
+  const switchMap = new Map();
+  for (const sw of graph.switches) switchMap.set(sw.nodeId, sw);
+  const curveMap = new Map();
+  for (const c of graph.curves) curveMap.set(c.segmentId, c);
+  // segmentsByNode: nodeId → [segment]
+  const segmentsByNode = new Map();
+  for (const s of graph.segments) {
+    let arr = segmentsByNode.get(s.from);
+    if (!arr) { arr = []; segmentsByNode.set(s.from, arr); }
+    arr.push(s);
+    if (s.to !== s.from) {
+      arr = segmentsByNode.get(s.to);
+      if (!arr) { arr = []; segmentsByNode.set(s.to, arr); }
+      arr.push(s);
+    }
+  }
+  const idx = { nodeMap, segmentMap, switchMap, curveMap, segmentsByNode };
+  graph._idx = idx;
+  return idx;
+}
+
 export function evalCubicBezier(P0, P1, P2, P3, t) {
   const mt = 1 - t;
   const mt2 = mt * mt;
@@ -91,17 +122,17 @@ function _arcTToBezierT(P0, P1, P2, P3, s) {
 }
 
 export function getNode(graph, id) {
-  return graph.nodes.find(n => n.id === id);
+  return _ensureIndexes(graph).nodeMap.get(id) || null;
 }
 export function getSegment(graph, id) {
-  return graph.segments.find(s => s.id === id);
+  return _ensureIndexes(graph).segmentMap.get(id) || null;
 }
 export function getSwitch(graph, nodeId) {
-  return graph.switches.find(s => s.nodeId === nodeId);
+  return _ensureIndexes(graph).switchMap.get(nodeId) || null;
 }
 
 export function getCurve(graph, segmentId) {
-  return graph.curves.find(c => c.segmentId === segmentId) || null;
+  return _ensureIndexes(graph).curveMap.get(segmentId) || null;
 }
 
 export function makeCurve(graph, segmentId, strength) {
@@ -210,7 +241,10 @@ export function segmentAngle(graph, segmentId, dir = 1, t = null) {
 
 // All segments connected to a node, except optionally one.
 export function segmentsAt(graph, nodeId, excludeSegmentId = null) {
-  return graph.segments.filter(s => (s.from === nodeId || s.to === nodeId) && s.id !== excludeSegmentId);
+  const idx = _ensureIndexes(graph);
+  const all = idx.segmentsByNode.get(nodeId) || [];
+  if (excludeSegmentId === null) return all;
+  return all.filter(s => s.id !== excludeSegmentId);
 }
 
 // Given we're approaching `nodeId` along `currentSegmentId`, return the next segment to take.

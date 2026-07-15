@@ -15,6 +15,23 @@ export const graph = {
   curves: [],
 };
 
+// Two parallel tracks ~15px apart — close enough to trigger the old distance-only bug.
+export const parallelGraph = {
+  nodes: [
+    { id: 'pn0', x: 0, y: 0, type: 'node' },
+    { id: 'pn1', x: 500, y: 0, type: 'node' },
+    { id: 'pn2', x: 0, y: 15, type: 'node' },
+    { id: 'pn3', x: 500, y: 15, type: 'node' },
+  ],
+  segments: [
+    { id: 'ps1', from: 'pn0', to: 'pn1' },
+    { id: 'ps2', from: 'pn2', to: 'pn3' },
+  ],
+  switches: [],
+  entryPoints: [],
+  curves: [],
+};
+
 let _passed = 0;
 let _failed = 0;
 
