@@ -467,6 +467,13 @@ export default function PlayMode() {
 // ───────────────────────────────────────────────────────────────────────
 
 function SceneOverlay({ graph, trains, activeTrainId, selection, onSwitchClick, onUnitClick, imgSize }) {
+  const switchBlocked = React.useMemo(() => {
+    const map = {};
+    for (const sw of graph.switches) {
+      map[sw.nodeId] = isSwitchBlocked(graph, trains, sw.nodeId);
+    }
+    return map;
+  }, [graph, trains]);
   return (
     <svg
       width={imgSize.w} height={imgSize.h}
@@ -500,7 +507,7 @@ function SceneOverlay({ graph, trains, activeTrainId, selection, onSwitchClick, 
       {graph.switches.map(sw => {
         const node = getNode(graph, sw.nodeId);
         if (!node) return null;
-        const blocked = isSwitchBlocked(graph, trains, sw.nodeId);
+        const blocked = switchBlocked[sw.nodeId];
         return (
           <g key={sw.id} className="pointer-events-auto" style={{ cursor: 'pointer' }}
              onClick={() => onSwitchClick(sw.nodeId)}>
