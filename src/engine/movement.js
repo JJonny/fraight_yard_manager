@@ -156,22 +156,37 @@ export function advanceTrain(graph, train, dt) {
   return train;
 }
 
+// Distance below which two trains' bodies are considered "touching" for collision purposes.
+export const COLLISION_PROXY_DIST = UNIT_LENGTH * 0.85;
+
 // Stop a train when colliding with another. Brute force: if any pair of unit centers from
-// different trains is closer than UNIT_LENGTH (overlap proxy), stop the moving one.
+// different trains is closer than COLLISION_PROXY_DIST (overlap proxy), stop the moving one.
+// Returns the list of colliding train-id pairs (deduplicated) so callers can couple them.
 export function checkCollisions(graph, trains) {
   const allPositions = trains.map(t => ({ train: t, positions: unitWorldPositions(graph, t) }));
+  const pairs = [];
+  const seen = new Set();
   for (let i = 0; i < allPositions.length; i++) {
     for (let j = 0; j < allPositions.length; j++) {
       if (i === j) continue;
       const A = allPositions[i], B = allPositions[j];
+      let hit = false;
       for (const a of A.positions) {
         for (const b of B.positions) {
           const d = Math.hypot(a.x - b.x, a.y - b.y);
-          if (d < UNIT_LENGTH * 0.85) {
-            if (A.train.speedPos !== 0) A.train.speedPos = 0;
-          }
+          if (d < COLLISION_PROXY_DIST) { hit = true; break; }
+        }
+        if (hit) break;
+      }
+      if (hit) {
+        if (A.train.speedPos !== 0) A.train.speedPos = 0;
+        const key = [A.train.id, B.train.id].sort().join('|');
+        if (!seen.has(key)) {
+          seen.add(key);
+          pairs.push([A.train.id, B.train.id]);
         }
       }
     }
   }
+  return pairs;
 }

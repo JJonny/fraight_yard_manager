@@ -6,7 +6,8 @@ import { LOCO_TYPES } from '../../assets/loco_types.js';
 import { WAGON_TYPES } from '../../assets/wagon_types.js';
 import {
   UNIT_LENGTH, UNIT_WIDTH, PIXELS_PER_GEAR, advanceTrain, unitWorldPositions,
-  trainHeadWorld, trainTailWorld, buildEntryPath, trainLength, pathTotalLength
+  trainHeadWorld, trainTailWorld, buildEntryPath, trainLength, pathTotalLength,
+  checkCollisions
 } from '../../engine/movement.js';
 import { autoCouple, decouple } from '../../engine/coupling.js';
 import { toggleSwitch, isSwitchBlocked, SWITCH_HITBOX_RADIUS } from '../../engine/switch.js';
@@ -122,10 +123,29 @@ export default function PlayMode() {
         }
       }
 
-      // Collisions: stop a train if its head reaches another train's bounds.
-      collide(activeTrans);
+      // Capture the currently controlled loco unit (by reference) so we can re-find it
+      // after any merge below, even if the merge changes which train id "wins".
+      const prevActiveTrain = activeTrans.find(t => t.id === activeTrainIdRef.current);
+      const prevActiveUnit = prevActiveTrain ? prevActiveTrain.units[prevActiveTrain.activeLocoIndex] : null;
+
+      // Collisions: stop a train if its head reaches another train's bounds, and report
+      // which pairs actually collided so they can be coupled together below (a collision
+      // between two trains on the same track IS a coupling event, not a permanent wall).
+      const collidedPairs = checkCollisions(graph, activeTrans);
       // Auto-coupling (exiting trains are at map edges, safe to include).
-      autoCouple(graph, activeTrans);
+      autoCouple(graph, activeTrans, collidedPairs);
+
+      // If a merge happened, keep control focus on the same physical loco, regardless of
+      // which train id survived the merge.
+      if (prevActiveUnit && !activeTrans.some(t => t.id === activeTrainIdRef.current)) {
+        const ownerTrain = activeTrans.find(t => t.units.includes(prevActiveUnit));
+        if (ownerTrain) {
+          ownerTrain.activeLocoIndex = ownerTrain.units.indexOf(prevActiveUnit);
+          activeTrainIdRef.current = ownerTrain.id;
+          setActiveTrainId(ownerTrain.id);
+        }
+      }
+
       trainsRef.current = activeTrans;
       setTrains([...activeTrans]);
       raf = requestAnimationFrame(loop);
@@ -438,21 +458,6 @@ export default function PlayMode() {
 }
 
 // ───────────────────────────────────────────────────────────────────────
-
-function collide(trains) {
-  // Per spec: front of moving train reaching another train or dead-end → instant stop.
-  // Dead-end stop is already handled inside advanceTrain (when no next segment exists).
-  // Here we handle train-vs-train: if moving train's head is within unit length of any
-  // OTHER train's body, stop it.
-  for (const t of trains) {
-    if (t.speedPos === 0) continue;
-    for (const other of trains) {
-      if (other === t) continue;
-      // Crude proximity check using unit centers.
-      // (autoCouple will then merge if appropriate.)
-    }
-  }
-}
 
 function SceneOverlay({ graph, trains, activeTrainId, selection, onSwitchClick, onUnitClick, imgSize }) {
   return (
