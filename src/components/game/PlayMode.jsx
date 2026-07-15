@@ -292,8 +292,28 @@ export default function PlayMode() {
     if (!decoupleAvailable) return;
     const t = trainsRef.current.find(t => t.id === decoupleAvailable.trainId);
     if (!t) return;
+    const wasActive = t.id === activeTrainIdRef.current;
+    const prevLocoUnit = wasActive ? t.units[t.activeLocoIndex] : null;
     const [front, back] = decouple(graph, t, decoupleAvailable.splitAfter);
     trainsRef.current = trainsRef.current.flatMap(x => x.id === t.id ? [front, back] : [x]);
+    if (wasActive) {
+      const owner = [front, back].find(h => prevLocoUnit && h.units.includes(prevLocoUnit));
+      if (owner && owner.units.some(u => u.kind === 'loco')) {
+        owner.activeLocoIndex = owner.units.indexOf(prevLocoUnit);
+        activeTrainIdRef.current = owner.id;
+        setActiveTrainId(owner.id);
+      } else {
+        const withLoco = [front, back].find(h => h.units.some(u => u.kind === 'loco'));
+        if (withLoco) {
+          withLoco.activeLocoIndex = withLoco.units.findIndex(u => u.kind === 'loco');
+          activeTrainIdRef.current = withLoco.id;
+          setActiveTrainId(withLoco.id);
+        } else {
+          activeTrainIdRef.current = null;
+          setActiveTrainId(null);
+        }
+      }
+    }
     setTrains([...trainsRef.current]);
     setSelection([]);
   }
