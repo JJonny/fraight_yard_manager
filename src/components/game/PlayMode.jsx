@@ -35,6 +35,7 @@ export default function PlayMode() {
   const [activeTrainId, setActiveTrainId] = useState(null);
   const [warning, setWarning] = useState(null);
   const [exitTargetEntryId, setExitTargetEntryId] = useState('');
+  const [switchVersion, setSwitchVersion] = useState(0);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panRef = useRef(null);
@@ -249,7 +250,7 @@ export default function PlayMode() {
   function onSwitchClick(nodeId) {
     const res = toggleSwitch(graph, trainsRef.current, nodeId);
     if (!res.ok) flashWarning(res.reason);
-    setGraph({ ...graph });
+    setSwitchVersion(v => v + 1);
   }
 
   function onUnitClick(trainId, unitIndex) {
@@ -400,6 +401,7 @@ export default function PlayMode() {
             onSwitchClick={onSwitchClick}
             onUnitClick={onUnitClick}
             imgSize={imgSize}
+            switchVersion={switchVersion}
           />
         </div>
       </div>
@@ -466,7 +468,7 @@ export default function PlayMode() {
 
 // ───────────────────────────────────────────────────────────────────────
 
-function SceneOverlay({ graph, trains, activeTrainId, selection, onSwitchClick, onUnitClick, imgSize }) {
+function SceneOverlay({ graph, trains, activeTrainId, selection, onSwitchClick, onUnitClick, imgSize, switchVersion }) {
   const switchBlocked = React.useMemo(() => {
     const map = {};
     for (const sw of graph.switches) {
@@ -498,7 +500,8 @@ function SceneOverlay({ graph, trains, activeTrainId, selection, onSwitchClick, 
               stroke={stroke} strokeWidth={4} strokeLinecap="round" />
       );
     })
-  ), [graph]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [graph, switchVersion]);
 
   const entryBases = React.useMemo(() => (
     graph.entryPoints.map(ep => {
