@@ -41,7 +41,7 @@ function _ensureIndexes(graph) {
       arr.push(s);
     }
   }
-  const idx = { nodeMap, segmentMap, switchMap, curveMap, segmentsByNode };
+  const idx = { nodeMap, segmentMap, switchMap, curveMap, segmentsByNode, segLenCache: new Map(), cpCache: new Map() };
   graph._idx = idx;
   return idx;
 }
@@ -80,6 +80,7 @@ export function bezierArcLength(P0, P1, P2, P3, n = 20) {
   return len;
 }
 
+const _ARC_CACHE_MAX = 512;
 const _arcTableCache = new Map();
 
 function _arcKey(P0, P1, P2, P3) {
@@ -107,6 +108,10 @@ function _arcTToBezierT(P0, P1, P2, P3, s) {
   let table = _arcTableCache.get(key);
   if (!table) {
     table = _buildArcTable(P0, P1, P2, P3);
+    if (_arcTableCache.size >= _ARC_CACHE_MAX) {
+      const first = _arcTableCache.keys().next().value;
+      _arcTableCache.delete(first);
+    }
     _arcTableCache.set(key, table);
   }
   let lo = 0, hi = table.length - 1;
@@ -159,43 +164,60 @@ export function removeCurve(graph, segmentId) {
 }
 
 export function computeCurveControlPoints(graph, segmentId, strength) {
+  const idx = _ensureIndexes(graph);
+  const cacheKey = `${segmentId}:${strength}`;
+  const cached = idx.cpCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
   const seg = getSegment(graph, segmentId);
-  if (!seg) return null;
+  if (!seg) { idx.cpCache.set(cacheKey, null); return null; }
   const P0 = getNode(graph, seg.from);
   const P3 = getNode(graph, seg.to);
-  if (!P0 || !P3) return null;
+  if (!P0 || !P3) { idx.cpCache.set(cacheKey, null); return null; }
   const fromSegs = segmentsAt(graph, seg.from, seg.id);
   const toSegs = segmentsAt(graph, seg.to, seg.id);
-  if (fromSegs.length !== 1 || toSegs.length !== 1) return null;
+  if (fromSegs.length !== 1 || toSegs.length !== 1) { idx.cpCache.set(cacheKey, null); return null; }
   const prevSeg = fromSegs[0];
   const nextSeg = toSegs[0];
   const A = getNode(graph, prevSeg.from === seg.from ? prevSeg.to : prevSeg.from);
   const D = getNode(graph, nextSeg.from === seg.to ? nextSeg.to : nextSeg.from);
-  if (!A || !D) return null;
+  if (!A || !D) { idx.cpCache.set(cacheKey, null); return null; }
   const chordLen = Math.hypot(P3.x - P0.x, P3.y - P0.y) || 1;
   const scale = strength * chordLen;
   const dx1 = P0.x - A.x, dy1 = P0.y - A.y;
   const len1 = Math.hypot(dx1, dy1) || 1;
   const dx2 = D.x - P3.x, dy2 = D.y - P3.y;
   const len2 = Math.hypot(dx2, dy2) || 1;
-  return {
+  const result = {
     cp1: { x: P0.x + (dx1 / len1) * scale, y: P0.y + (dy1 / len1) * scale },
     cp2: { x: P3.x - (dx2 / len2) * scale, y: P3.y - (dy2 / len2) * scale },
   };
+  idx.cpCache.set(cacheKey, result);
+  return result;
 }
 
 export function segmentLength(graph, segment) {
+  const idx = _ensureIndexes(graph);
+  const cached = idx.segLenCache.get(segment.id);
+  if (cached !== undefined) return cached;
+
   const a = getNode(graph, segment.from);
   const b = getNode(graph, segment.to);
-  if (!a || !b) return 0;
+  if (!a || !b) { idx.segLenCache.set(segment.id, 0); return 0; }
   const curve = getCurve(graph, segment.id);
+  let len;
   if (curve) {
     const cps = computeCurveControlPoints(graph, segment.id, curve.strength);
     if (cps) {
-      return bezierArcLength(a, cps.cp1, cps.cp2, b);
+      len = bezierArcLength(a, cps.cp1, cps.cp2, b);
+    } else {
+      len = Math.hypot(b.x - a.x, b.y - a.y);
     }
+  } else {
+    len = Math.hypot(b.x - a.x, b.y - a.y);
   }
-  return Math.hypot(b.x - a.x, b.y - a.y);
+  idx.segLenCache.set(segment.id, len);
+  return len;
 }
 
 // Position along a segment given direction (+1 means from->to, -1 means to->from)

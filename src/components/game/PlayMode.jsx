@@ -474,36 +474,69 @@ function SceneOverlay({ graph, trains, activeTrainId, selection, onSwitchClick, 
     }
     return map;
   }, [graph, trains]);
+
+  const segmentsSvg = React.useMemo(() => (
+    graph.segments.map(s => {
+      const a = getNode(graph, s.from);
+      const b = getNode(graph, s.to);
+      if (!a || !b) return null;
+      const sw = graph.switches.find(w => w.defaultSegment === s.id || w.divergingSegment === s.id);
+      let stroke = '#10b981';
+      if (sw) stroke = sw.activeSegment === s.id ? '#22c55e' : '#525252';
+      const curve = getCurve(graph, s.id);
+      if (curve) {
+        const cps = computeCurveControlPoints(graph, s.id, curve.strength);
+        if (cps) {
+          const d = `M ${a.x},${a.y} C ${cps.cp1.x},${cps.cp1.y} ${cps.cp2.x},${cps.cp2.y} ${b.x},${b.y}`;
+          return (
+            <path key={s.id} d={d} stroke={stroke} strokeWidth={4} fill="none" strokeLinecap="round" />
+          );
+        }
+      }
+      return (
+        <line key={s.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+              stroke={stroke} strokeWidth={4} strokeLinecap="round" />
+      );
+    })
+  ), [graph]);
+
+  const entryBases = React.useMemo(() => (
+    graph.entryPoints.map(ep => {
+      const node = getNode(graph, ep.nodeId);
+      if (!node) return null;
+      return (
+        <g key={ep.id}>
+          <circle cx={node.x} cy={node.y} r={6} fill="#f59e0b" stroke="#000" strokeWidth={2} />
+          <text x={node.x + 10} y={node.y - 10} fill="#fde68a" fontSize="12">{ep.label}</text>
+        </g>
+      );
+    })
+  ), [graph]);
+
+  const entryHighlights = React.useMemo(() => (
+    graph.entryPoints.map(ep => {
+      const node = getNode(graph, ep.nodeId);
+      if (!node) return null;
+      const isExitTarget = trains.some(t => t.exitEntryId === ep.id && !t.isExiting);
+      const isDeparting = trains.some(t => t.exitEntryId === ep.id && t.isExiting);
+      if (!isExitTarget && !isDeparting) return null;
+      return (
+        <circle key={`hl-${ep.id}`} cx={node.x} cy={node.y} r={10}
+                fill="none"
+                stroke={isDeparting ? '#f59e0b' : '#38bdf8'}
+                strokeWidth={2}
+                strokeDasharray={isDeparting ? undefined : '3 3'} />
+      );
+    })
+  ), [graph, trains]);
+
   return (
     <svg
       width={imgSize.w} height={imgSize.h}
       viewBox={`0 0 ${imgSize.w} ${imgSize.h}`}
       className="absolute top-0 left-0 pointer-events-none"
     >
-      {/* Segments */}
-      {graph.segments.map(s => {
-        const a = getNode(graph, s.from);
-        const b = getNode(graph, s.to);
-        if (!a || !b) return null;
-        const sw = graph.switches.find(w => w.defaultSegment === s.id || w.divergingSegment === s.id);
-        let stroke = '#10b981';
-        if (sw) stroke = sw.activeSegment === s.id ? '#22c55e' : '#525252';
-        const curve = getCurve(graph, s.id);
-        if (curve) {
-          const cps = computeCurveControlPoints(graph, s.id, curve.strength);
-          if (cps) {
-            const d = `M ${a.x},${a.y} C ${cps.cp1.x},${cps.cp1.y} ${cps.cp2.x},${cps.cp2.y} ${b.x},${b.y}`;
-            return (
-              <path key={s.id} d={d} stroke={stroke} strokeWidth={4} fill="none" strokeLinecap="round" />
-            );
-          }
-        }
-        return (
-          <line key={s.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                stroke={stroke} strokeWidth={4} strokeLinecap="round" />
-        );
-      })}
-      {/* Switch hitboxes */}
+      {segmentsSvg}
       {graph.switches.map(sw => {
         const node = getNode(graph, sw.nodeId);
         if (!node) return null;
@@ -517,28 +550,8 @@ function SceneOverlay({ graph, trains, activeTrainId, selection, onSwitchClick, 
           </g>
         );
       })}
-      {/* Entry points */}
-      {graph.entryPoints.map(ep => {
-        const node = getNode(graph, ep.nodeId);
-        if (!node) return null;
-        // Highlight entries that are exit targets for any active train.
-        const isExitTarget = trains.some(t => t.exitEntryId === ep.id && !t.isExiting);
-        const isDeparting = trains.some(t => t.exitEntryId === ep.id && t.isExiting);
-        return (
-          <g key={ep.id}>
-            {(isExitTarget || isDeparting) && (
-              <circle cx={node.x} cy={node.y} r={10}
-                      fill="none"
-                      stroke={isDeparting ? '#f59e0b' : '#38bdf8'}
-                      strokeWidth={2}
-                      strokeDasharray={isDeparting ? undefined : '3 3'} />
-            )}
-            <circle cx={node.x} cy={node.y} r={6} fill="#f59e0b" stroke="#000" strokeWidth={2} />
-            <text x={node.x + 10} y={node.y - 10} fill="#fde68a" fontSize="12">{ep.label}</text>
-          </g>
-        );
-      })}
-      {/* Trains */}
+      {entryBases}
+      {entryHighlights}
       {trains.map(t => (
         <TrainRender
           key={t.id}

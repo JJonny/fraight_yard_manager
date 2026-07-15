@@ -5,6 +5,7 @@ import {
   segmentLength, pointOnSegment, segmentAngle,
   findSwitchBranches, makeCurve, removeCurve, parallelizeSegments,
   evalCubicBezier, evalCubicBezierTangent,
+  computeCurveControlPoints,
 } from '../../src/engine/rail_graph.js';
 import { assert, results } from './helpers.mjs';
 
@@ -277,6 +278,92 @@ console.log('--- parallelizeSegments ---');
   // Single segment → no-op.
   const noop = parallelizeSegments(linear, ['s1'], 20);
   assert(noop === linear, 'single segment is no-op');
+}
+
+// ── Cache: segmentLength memoization ────────────────────────────────────────
+console.log('--- segmentLength memoization ---');
+{
+  const seg = getSegment(linear, 's1');
+  const len1 = segmentLength(linear, seg);
+  const len2 = segmentLength(linear, seg);
+  assert(len1 === len2, 'repeated call returns same value');
+  assert(typeof len1 === 'number' && len1 > 0, 'length is positive number');
+}
+
+// ── Cache: computeCurveControlPoints memoization ────────────────────────────
+console.log('--- computeCurveControlPoints memoization ---');
+{
+  // Chain graph: n0 --s1-- n1 --s2-- n2 --s3-- n3
+  // s2 is the middle segment — both n1 and n2 have degree 2, so control points can be computed.
+  let chain = cloneGraph(linear);
+  chain = {
+    ...chain,
+    nodes: [
+      ...chain.nodes,
+      { id: 'n3', x: 1500, y: 0, type: 'node' },
+    ],
+    segments: [
+      ...chain.segments,
+      { id: 's3', from: 'n2', to: 'n3' },
+    ],
+  };
+  chain = makeCurve(chain, 's2', 0.4);
+  delete chain._idx;
+
+  const cp1 = computeCurveControlPoints(chain, 's2', 0.4);
+  const cp2 = computeCurveControlPoints(chain, 's2', 0.4);
+  assert(cp1 !== null, 'control points computed');
+  assert(cp1 === cp2, 'repeated call returns cached object (same reference)');
+
+  // Different strength → different entry.
+  const cp3 = computeCurveControlPoints(chain, 's2', 0.8);
+  assert(cp3 !== cp1, 'different strength yields different result');
+}
+
+// ── Cache: invalidation on new graph object ─────────────────────────────────
+console.log('--- cache invalidation on new graph ---');
+{
+  const seg = getSegment(linear, 's1');
+  const len1 = segmentLength(linear, seg);
+
+  // New graph object with same data → new _idx → fresh cache.
+  const g2 = cloneGraph(linear);
+  const len2 = segmentLength(g2, seg);
+  assert(len1 === len2, 'same length on new graph');
+}
+
+// ── Cache: LRU does not break pointOnSegment ───────────────────────────────
+console.log('--- arc table LRU stress ---');
+{
+  // Generate >512 distinct curve shapes to exercise LRU eviction.
+  let g = cloneGraph(linear);
+  g = {
+    ...g,
+    nodes: [
+      ...g.nodes,
+      { id: 'n3', x: 1500, y: 0, type: 'node' },
+    ],
+    segments: [
+      ...g.segments,
+      { id: 's3', from: 'n2', to: 'n3' },
+    ],
+  };
+  g = makeCurve(g, 's2', 0.3);
+
+  for (let i = 0; i < 600; i++) {
+    const shifted = {
+      ...g,
+      nodes: g.nodes.map(n =>
+        n.id === 'n2' ? { ...n, x: 1000 + i * 0.1 } : n
+      ),
+    };
+    delete shifted._idx;
+    pointOnSegment(shifted, 's2', 0.5, 1);
+  }
+  // If LRU works, no crash. Verify still correct on original graph.
+  delete g._idx;
+  const pt = pointOnSegment(g, 's2', 0, 1);
+  assert(Math.abs(pt.x - 500) < 1 && Math.abs(pt.y) < 1, 'pointOnSegment still correct after LRU stress');
 }
 
 // ── Summary ─────────────────────────────────────────────────────────────────
